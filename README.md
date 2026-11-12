@@ -5,7 +5,7 @@ Microservicios Spring Boot del proyecto Paolicias.Sweet (DSY1105, Duoc UC). Dato
 | Servicio | Puerto | Tabla | Estado |
 |---|---|---|---|
 | `catalogo-service` | 8081 | `productos` | En desarrollo |
-| `reservas-service` | 8082 | `reservas` | Pendiente |
+| `reservas-service` | 8082 | `reservas` | En desarrollo |
 
 Todos usan un mismo Postgres (`paolicias_db`) y cada servicio es dueño de sus tablas.
 
@@ -35,3 +35,11 @@ catalogo-service/src/main/java/com/paolicias/catalogo
 ├── controller   ProductoController
 └── seed         ProductoSeeder (11 productos iniciales)
 ```
+
+## Endpoints de reservas-service
+
+| Método | Ruta | Respuesta |
+|---|---|---|
+| GET | `/api/reservas` | Lista de reservas |
+| GET | `/api/reservas/{id}` | Una reserva, o 404 |
+| POST | `/api/reservas` | Crea una reserva (201) |
