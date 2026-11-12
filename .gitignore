@@ -1,0 +1,19 @@
+# Secretos: NUNCA se suben al repositorio
+.env
+*.pem
+*.jks
+*.keystore
+
+# Maven / Java
+target/
+*.class
+*.log
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.DS_Store
