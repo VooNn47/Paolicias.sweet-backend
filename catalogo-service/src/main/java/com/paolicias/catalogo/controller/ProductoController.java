@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.paolicias.catalogo.entities.Producto;
 import com.paolicias.catalogo.services.ProductoService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/productos")
 public class ProductoController {
@@ -25,7 +27,7 @@ public class ProductoController {
         this.productoService = productoService;
     }
 
-    // GET /api/productos  ->  catálogo completo
+    // GET /api/productos  ->  catálogo completo (ordenado por categoría y nombre)
     @GetMapping
     public List<Producto> listarProductos() {
         return productoService.obtenerTodos();
@@ -39,10 +41,10 @@ public class ProductoController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // POST /api/productos  ->  crea un producto (201)
+    // POST /api/productos  ->  crea un producto (201). Se valida y se ignora el id del JSON.
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Producto guardarProducto(@RequestBody Producto producto) {
+    public Producto guardarProducto(@Valid @RequestBody Producto producto) {
         return productoService.crear(producto);
     }
 

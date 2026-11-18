@@ -11,17 +11,26 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3   # pocas conexiones: la EC2 tiene poca memoria
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: ${DDL_AUTO:update}
-    show-sql: ${SHOW_SQL:true}
-    properties:
-      hibernate:
-        format_sql: true
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
 
-logging:
-  level:
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
+  # Tamaño máximo del comprobante de transferencia
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+# Dirección de catalogo-service (para pedir los precios al cotizar)
+catalogo:
+  url: ${CATALOGO_URL:http://localhost:8081}
+
+# Carpeta donde se guardan las imágenes de los comprobantes (en Docker es un volumen)
+comprobantes:
+  directorio: ${COMPROBANTES_DIR:./comprobantes}

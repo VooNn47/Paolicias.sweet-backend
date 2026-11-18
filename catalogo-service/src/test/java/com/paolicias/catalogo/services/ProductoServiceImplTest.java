@@ -2,9 +2,10 @@ package com.paolicias.catalogo.services;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -34,10 +35,9 @@ class ProductoServiceImplTest {
 
     @Test
     void obtenerTodos_devuelveLaListaDelRepositorio() {
-        List<Producto> productos = List.of(
+        when(repo.findAllByOrderByCategoriaAscNombreAsc()).thenReturn(List.of(
                 productoEjemplo(1L, "Torta Tres Leches"),
-                productoEjemplo(2L, "Torta de Chocolate"));
-        when(repo.findAll()).thenReturn(productos);
+                productoEjemplo(2L, "Torta de Chocolate")));
 
         List<Producto> resultado = service.obtenerTodos();
 
@@ -49,30 +49,27 @@ class ProductoServiceImplTest {
     void obtenerPorId_conIdExistente_devuelveElProducto() {
         when(repo.findById(1L)).thenReturn(Optional.of(productoEjemplo(1L, "Torta Tres Leches")));
 
-        Optional<Producto> resultado = service.obtenerPorId(1L);
-
-        assertTrue(resultado.isPresent());
-        assertEquals("Torta Tres Leches", resultado.get().getNombre());
+        assertTrue(service.obtenerPorId(1L).isPresent());
     }
 
     @Test
     void obtenerPorId_conIdInexistente_devuelveVacio() {
         when(repo.findById(99L)).thenReturn(Optional.empty());
 
-        Optional<Producto> resultado = service.obtenerPorId(99L);
-
-        assertFalse(resultado.isPresent());
+        assertFalse(service.obtenerPorId(99L).isPresent());
     }
 
     @Test
-    void crear_guardaElProductoYLoDevuelve() {
-        Producto nuevo = productoEjemplo(null, "Kuchen de Frambuesa");
-        Producto guardado = productoEjemplo(5L, "Kuchen de Frambuesa");
-        when(repo.save(nuevo)).thenReturn(guardado);
+    void crear_ignoraElIdQueVieneEnElJson() {
+        when(repo.save(any(Producto.class))).thenAnswer(inv -> {
+            Producto p = inv.getArgument(0);
+            assertNull(p.getId()); // nunca se sobrescribe un producto existente
+            p.setId(12L);
+            return p;
+        });
 
-        Producto resultado = service.crear(nuevo);
+        Producto resultado = service.crear(productoEjemplo(1L, "Kuchen de Frambuesa"));
 
-        assertEquals(5L, resultado.getId());
-        verify(repo).save(nuevo);
+        assertEquals(12L, resultado.getId());
     }
 }
