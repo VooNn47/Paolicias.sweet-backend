@@ -19,7 +19,7 @@ public class ProductoServiceImpl implements ProductoService {
 
     @Override
     public List<Producto> obtenerTodos() {
-        return productoRepo.findAll();
+        return productoRepo.findAllByOrderByCategoriaAscNombreAsc();
     }
 
     @Override
@@ -29,6 +29,8 @@ public class ProductoServiceImpl implements ProductoService {
 
     @Override
     public Producto crear(Producto producto) {
+        // Se ignora el id que venga en el JSON: así un POST nunca sobrescribe un producto existente
+        producto.setId(null);
         return productoRepo.save(producto);
     }
 

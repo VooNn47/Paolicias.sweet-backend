@@ -1,17 +1,18 @@
 package com.paolicias.reservas.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.paolicias.reservas.entities.EstadoAbono;
 import com.paolicias.reservas.entities.Reserva;
 import com.paolicias.reservas.services.ReservaService;
 
@@ -27,52 +28,43 @@ class ReservaControllerTest {
         controller = new ReservaController(service);
     }
 
-    private Reserva reservaEjemplo(Long id) {
+    private Reserva reservaEjemplo(Long id, String estado) {
         Reserva r = new Reserva();
         r.setId(id);
         r.setNombreEvento("Cumpleanos");
-        r.setFecha("2026-12-20");
-        r.setHorario("20:00");
-        r.setInvitados("30");
+        r.setEstadoAbono(estado);
+        r.setTotal(64000);
         return r;
     }
 
     @Test
-    void listarReservas_devuelveTodasLasReservas() {
-        when(service.obtenerTodas()).thenReturn(List.of(reservaEjemplo(1L), reservaEjemplo(2L)));
+    void listarReservas_pasaLosFiltrosAlServicio() {
+        when(service.listar("ana@correo.cl", null)).thenReturn(List.of(reservaEjemplo(1L, EstadoAbono.PENDIENTE)));
 
-        List<Reserva> resultado = controller.listarReservas();
-
-        assertEquals(2, resultado.size());
+        assertEquals(1, controller.listarReservas("ana@correo.cl", null).size());
     }
 
     @Test
-    void obtenerPorId_conIdExistente_responde200() {
-        when(service.obtenerPorId(1L)).thenReturn(Optional.of(reservaEjemplo(1L)));
+    void obtenerPorId_conIdExistente_devuelveLaReserva() {
+        when(service.obtener(1L)).thenReturn(reservaEjemplo(1L, EstadoAbono.PENDIENTE));
 
-        ResponseEntity<Reserva> respuesta = controller.obtenerPorId(1L);
+        Reserva r = controller.obtenerPorId(1L);
 
-        assertEquals(200, respuesta.getStatusCode().value());
-        assertEquals("Cumpleanos", respuesta.getBody().getNombreEvento());
+        assertEquals("Cumpleanos", r.getNombreEvento());
+        assertEquals(32000, r.getAbono());
     }
 
     @Test
-    void obtenerPorId_conIdInexistente_responde404() {
-        when(service.obtenerPorId(99L)).thenReturn(Optional.empty());
+    void obtenerPorId_conIdInexistente_propagaEl404() {
+        when(service.obtener(99L)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-        ResponseEntity<Reserva> respuesta = controller.obtenerPorId(99L);
-
-        assertEquals(404, respuesta.getStatusCode().value());
-        assertNull(respuesta.getBody());
+        assertThrows(ResponseStatusException.class, () -> controller.obtenerPorId(99L));
     }
 
     @Test
-    void guardarReserva_devuelveLaReservaCreada() {
-        Reserva nueva = reservaEjemplo(null);
-        when(service.crear(nueva)).thenReturn(reservaEjemplo(7L));
+    void validar_devuelveLaReservaPagada() {
+        when(service.validarAbono(1L)).thenReturn(reservaEjemplo(1L, EstadoAbono.PAGADO));
 
-        Reserva resultado = controller.guardarReserva(nueva);
-
-        assertEquals(7L, resultado.getId());
+        assertEquals(EstadoAbono.PAGADO, controller.validar(1L).getEstadoAbono());
     }
 }

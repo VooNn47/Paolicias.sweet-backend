@@ -1,12 +1,28 @@
+# Un contenedor por microservicio + Postgres. Pensado para una EC2 pequeña (1 GB de RAM).
+#   Local:      docker compose up -d --build
+#   EC2 HTTPS:  docker compose --profile https up -d --build   (necesita DOMINIO en el .env)
+x-java: &java
+  # Java usa como máximo el 75% del límite del contenedor; SerialGC gasta menos memoria
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1"
+  TZ: America/Santiago
+  DB_HOST: postgres-db
+  DB_PORT: 5432
+  DB_NAME: paolicias_db
+  DB_USER: ${DB_USER}
+  DB_PASSWORD: ${DB_PASSWORD}
+  DDL_AUTO: update
+
 services:
   postgres-db:
     image: postgres:18-alpine
     container_name: postgres_paolicias
     restart: always
+    mem_limit: 256m
     environment:
       POSTGRES_DB: paolicias_db
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: America/Santiago
     ports:
       - "5434:5432"
     volumes:
@@ -21,39 +37,56 @@ services:
     build: ./catalogo-service
     container_name: catalogo_service
     restart: always
+    mem_limit: 320m
     depends_on:
       postgres-db:
         condition: service_healthy
     ports:
       - "8081:8081"
     environment:
+      <<: *java
       PORT: 8081
-      DB_HOST: postgres-db
-      DB_PORT: 5432
-      DB_NAME: paolicias_db
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DDL_AUTO: update
-      SHOW_SQL: "false"
 
   reservas-service:
     build: ./reservas-service
     container_name: reservas_service
     restart: always
+    mem_limit: 352m
     depends_on:
       postgres-db:
         condition: service_healthy
     ports:
       - "8082:8082"
     environment:
+      <<: *java
       PORT: 8082
-      DB_HOST: postgres-db
-      DB_PORT: 5432
-      DB_NAME: paolicias_db
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DDL_AUTO: update
-      SHOW_SQL: "false"
+      CATALOGO_URL: http://catalogo-service:8081
+      COMPROBANTES_DIR: /data/comprobantes
+    volumes:
+      - comprobantes_data:/data/comprobantes
+
+  # HTTPS automático (Let's Encrypt). Solo se levanta con: --profile https
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy_paolicias
+    profiles: ["https"]
+    restart: always
+    mem_limit: 64m
+    depends_on:
+      - catalogo-service
+      - reservas-service
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   postgres_data:
+  comprobantes_data:
+  caddy_data:
+  caddy_config:
