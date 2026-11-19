@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.springframework.web.bind.annotation.DeleteMapping;
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.Reserva;
 import com.paolicias.reservas.services.ReservaService;
@@ -90,4 +90,9 @@ public class ReservaController {
     public Reserva completar(@PathVariable Long id) {
         return reservaService.marcarCompletada(id);
     }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void eliminarReserva(@PathVariable Long id) {
+    reservaService.eliminar(id);}
 }

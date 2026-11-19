@@ -87,6 +87,20 @@ public class ReservaServiceImpl implements ReservaService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La reserva no existe"));
     }
 
+
+    @Override
+    public void eliminar(Long id) {
+        Reserva r = obtener(id);
+
+     
+        String comprobante = r.getComprobante();
+
+        
+        reservaRepo.delete(r);
+
+        almacen.borrar(comprobante);
+    }
+
     @Override
     public Reserva adjuntarComprobante(Long id, String correo, MultipartFile archivo) {
         Reserva r = obtener(id);

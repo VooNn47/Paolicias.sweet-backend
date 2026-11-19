@@ -16,6 +16,8 @@ public interface ReservaService {
     List<Reserva> listar(String correo, String estado);
 
     Reserva obtener(Long id);
+    
+    void eliminar(Long id);
 
     Reserva adjuntarComprobante(Long id, String correo, MultipartFile archivo);
 
