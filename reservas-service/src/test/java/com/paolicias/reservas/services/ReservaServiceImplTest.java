@@ -3,7 +3,9 @@ package com.paolicias.reservas.services;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,31 +18,38 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.paolicias.reservas.client.CotizacionClient;
+import com.paolicias.reservas.client.InsumosClient;
+import com.paolicias.reservas.dto.CalculoInsumos;
+import com.paolicias.reservas.dto.LineaProducto;
 import com.paolicias.reservas.dto.Cotizacion;
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.EstadoAbono;
 import com.paolicias.reservas.entities.Reserva;
 import com.paolicias.reservas.repository.ReservaRepository;
 
-// Pruebas unitarias del servicio: repositorio, cotización y almacén se simulan con Mockito.
+// Pruebas unitarias del servicio: repositorio, cliente de cotización y almacén se simulan con Mockito.
 class ReservaServiceImplTest {
 
     private static final String CLIENTE = "ana@correo.cl";
 
     private ReservaRepository repo;
-    private CotizacionService cotizacion;
+    private CotizacionClient cotizacion;
+    private InsumosClient insumos;
     private AlmacenComprobantes almacen;
     private ReservaServiceImpl service;
 
     @BeforeEach
     void setUp() {
         repo = mock(ReservaRepository.class);
-        cotizacion = mock(CotizacionService.class);
+        cotizacion = mock(CotizacionClient.class);
+        insumos = mock(InsumosClient.class);
         almacen = mock(AlmacenComprobantes.class);
-        service = new ReservaServiceImpl(repo, cotizacion, almacen);
+        service = new ReservaServiceImpl(repo, cotizacion, insumos, almacen);
         when(repo.save(any(Reserva.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -64,7 +73,7 @@ class ReservaServiceImplTest {
 
     @Test
     void crear_normalizaElCorreoYUsaElTotalDelServidor() {
-        when(cotizacion.calcular(25, List.of(1L))).thenReturn(new Cotizacion(25, 80000,
+        when(cotizacion.cotizar(25, List.of(1L))).thenReturn(new Cotizacion(25, 80000,
                 List.of(new Cotizacion.Linea(1L, "Torta", 3, 45000, 135000)), 215000, 107500));
 
         Reserva r = service.crear(request());
@@ -75,6 +84,7 @@ class ReservaServiceImplTest {
         assertEquals(215000, r.getTotal());
         assertEquals(107500, r.getAbono());
         assertEquals("1", r.getProductos());
+        assertEquals("1:3", r.getDetalleProductos());
     }
 
     @Test
@@ -165,6 +175,51 @@ class ReservaServiceImplTest {
 
         assertEquals(EstadoAbono.PAGADO, r.getEstadoAbono());
         assertEquals(LocalDate.now(), r.getFechaPago());
+    }
+
+    @Test
+    void validarAbono_descuentaLosInsumosDeLaReserva() {
+        Reserva r = reserva(EstadoAbono.EN_REVISION);
+        r.setDetalleProductos("1:3,7:25");
+        when(repo.findById(1L)).thenReturn(Optional.of(r));
+
+        service.validarAbono(1L);
+
+        verify(insumos).consumir(1L, List.of(new LineaProducto(1L, 3), new LineaProducto(7L, 25)));
+    }
+
+    @Test
+    void validarAbono_siFaltanInsumos_lanza409YQuedaEnRevision() {
+        Reserva r = reserva(EstadoAbono.EN_REVISION);
+        r.setDetalleProductos("1:9");
+        when(repo.findById(1L)).thenReturn(Optional.of(r));
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Faltan insumos: Frutos rojos (0.6 kg)"))
+                .when(insumos).consumir(any(), any());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> service.validarAbono(1L));
+
+        assertEquals(409, ex.getStatusCode().value());
+        assertEquals(EstadoAbono.EN_REVISION, r.getEstadoAbono());
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void calcularInsumos_enviaLasUnidadesDeCadaProducto() {
+        Reserva r = reserva(EstadoAbono.EN_REVISION);
+        r.setDetalleProductos("1:3");
+        when(repo.findById(1L)).thenReturn(Optional.of(r));
+        CalculoInsumos calculo = new CalculoInsumos(true, List.of());
+        when(insumos.calcular(List.of(new LineaProducto(1L, 3)))).thenReturn(calculo);
+
+        assertEquals(calculo, service.calcularInsumos(1L));
+    }
+
+    @Test
+    void calcularInsumos_reservaSinProductos_enviaListaVacia() {
+        when(repo.findById(1L)).thenReturn(Optional.of(reserva(EstadoAbono.PENDIENTE)));
+        when(insumos.calcular(List.of())).thenReturn(new CalculoInsumos(true, List.of()));
+
+        assertTrue(service.calcularInsumos(1L).alcanza());
     }
 
     @Test

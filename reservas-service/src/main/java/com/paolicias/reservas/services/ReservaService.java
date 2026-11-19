@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import com.paolicias.reservas.dto.CalculoInsumos;
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.Reserva;
 
@@ -28,6 +29,9 @@ public interface ReservaService {
     Reserva rechazarAbono(Long id);
 
     Reserva marcarCompletada(Long id);
+
+    // Cuánto se necesita de cada insumo para la reserva y si alcanza el inventario
+    CalculoInsumos calcularInsumos(Long id);
 
     record ArchivoComprobante(Path ruta, String tipo) {
     }

@@ -1,0 +1,26 @@
+server:
+  port: ${PORT:8083}
+  address: 0.0.0.0
+
+spring:
+  application:
+    name: cotizacion-service
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:paolicias_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 2   # pocas conexiones: la EC2 tiene poca memoria
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
+
+# Dirección de catalogo-service (para pedir los precios de los productos)
+catalogo:
+  url: ${CATALOGO_URL:http://localhost:8081}

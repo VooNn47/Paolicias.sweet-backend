@@ -1,4 +1,4 @@
-package com.paolicias.reservas.services;
+package com.paolicias.cotizacion.services;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -8,33 +8,35 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.paolicias.reservas.client.CatalogoClient;
-import com.paolicias.reservas.dto.Cotizacion;
-import com.paolicias.reservas.dto.ProductoCatalogo;
+import com.paolicias.cotizacion.client.CatalogoClient;
+import com.paolicias.cotizacion.dto.Cotizacion;
+import com.paolicias.cotizacion.dto.ProductoCatalogo;
+import com.paolicias.cotizacion.entities.Tarifa;
+import com.paolicias.cotizacion.repository.TarifaRepository;
 
 // Regla de cotización del README de la app:
 //   total = tarifa del servicio (según invitados) + Σ ceil(invitados / porciones) × precio
-// Los precios se piden SIEMPRE a catalogo-service, nunca se confía en lo que mande la app.
+// La tarifa sale de la tabla "tarifas" y los precios se piden SIEMPRE a catalogo-service.
 @Service
 public class CotizacionService {
 
-    // 1-10 -> 30.000, 11-20 -> 50.000, ... 91-100 -> 220.000
-    private static final int[] TARIFAS = {
-            30000, 50000, 80000, 100000, 120000,
-            140000, 160000, 180000, 200000, 220000
-    };
-
     private final CatalogoClient catalogo;
+    private final TarifaRepository tarifaRepo;
 
-    public CotizacionService(CatalogoClient catalogoClient) {
+    public CotizacionService(CatalogoClient catalogoClient, TarifaRepository tarifaRepository) {
         this.catalogo = catalogoClient;
+        this.tarifaRepo = tarifaRepository;
     }
 
-    public static int tarifaServicio(int invitados) {
-        if (invitados < 1 || invitados > 100) {
-            return 0;
-        }
-        return TARIFAS[(invitados - 1) / 10];
+    // Tarifa del servicio para esa cantidad de invitados (0 si ningún tramo la contiene)
+    public int tarifaServicio(int invitados) {
+        return tarifaRepo.findFirstByMinInvitadosLessThanEqualAndMaxInvitadosGreaterThanEqual(invitados, invitados)
+                .map(Tarifa::getMonto)
+                .orElse(0);
+    }
+
+    public List<Tarifa> tarifas() {
+        return tarifaRepo.findAllByOrderByMinInvitadosAsc();
     }
 
     public Cotizacion calcular(int invitados, List<Long> productoIds) {

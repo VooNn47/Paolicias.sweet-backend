@@ -1,4 +1,4 @@
-package com.paolicias.reservas.client;
+package com.paolicias.cotizacion.client;
 
 import java.util.Optional;
 
@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.paolicias.reservas.dto.ProductoCatalogo;
+import com.paolicias.cotizacion.dto.ProductoCatalogo;
 
 // Comunicación entre microservicios: pide los precios a catalogo-service por HTTP.
 // Así el total de la reserva siempre usa los precios reales del catálogo.

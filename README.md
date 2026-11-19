@@ -5,13 +5,24 @@ Microservicios Spring Boot del proyecto Paolicias.Sweet (DSY1105, Duoc UC). Dato
 | Servicio | Puerto | Tabla | Qué hace |
 |---|---|---|---|
 | `catalogo-service` | 8081 | `productos` | Catálogo de productos |
-| `reservas-service` | 8082 | `reservas` | Reservas, cotización, comprobantes y flujo del abono |
+| `reservas-service` | 8082 | `reservas` | Reservas, comprobantes y flujo del abono |
+| `cotizacion-service` | 8083 | `tarifas` | Precio del evento: tarifa por invitados + productos |
+| `insumos-service` | 8084 | `insumos`, `recetas`, `consumos` | Inventario de la administradora y cálculo de insumos por reserva |
 
-Los dos usan el mismo Postgres (`paolicias_db`) y cada servicio es dueño de su tabla.
+Los cuatro usan el mismo Postgres (`paolicias_db`) y cada servicio es dueño de su tabla.
 Un contenedor por microservicio. El **login y registro** viven en la app (SQLite), como pide la rúbrica.
 
-`reservas-service` le pide los precios a `catalogo-service` por HTTP (`CatalogoClient`) para calcular el total:
-así el precio nunca depende de lo que mande la app.
+Comunicación entre microservicios (HTTP con `RestClient`):
+
+```
+app ──► catalogo-service      (catálogo)
+app ──► cotizacion-service ──► catalogo-service      (precio antes de reservar)
+app ──► reservas-service ──► cotizacion-service ──► catalogo-service   (total al crear la reserva)
+app ──► reservas-service ──► insumos-service      (calcular insumos / descontarlos al validar el abono)
+app ──► insumos-service      (inventario de la administradora)
+```
+
+Así el precio de una reserva siempre lo calcula el servidor, nunca depende de lo que mande la app.
 
 ## Cómo ejecutar (local, con Docker)
 
@@ -32,18 +43,53 @@ así el precio nunca depende de lo que mande la app.
 | GET | `/api/productos/{id}` | Un producto, o 404 |
 | POST | `/api/productos` | Crea un producto (201). Valida los datos e ignora el `id` del JSON |
 
+## Endpoints de cotizacion-service (8083)
+
+| Método | Ruta | Respuesta |
+|---|---|---|
+| POST | `/api/cotizacion` | Desglose: tarifa + productos + total + abono (400 si un producto no existe) |
+| GET | `/api/tarifas` | Tramos de tarifa por cantidad de invitados (tabla `tarifas`) |
+
+```json
+POST /api/cotizacion
+{ "invitados": 25, "productoIds": [1] }
+→ { "invitados": 25, "servicio": 80000, "lineas": [ { "productoId": 1, "nombre": "Torta Frutos Rojos",
+    "unidades": 3, "precioUnitario": 45000, "subtotal": 135000 } ], "total": 215000, "abono": 107500 }
+```
+
+La tabla `tarifas` se llena sola la primera vez (1–10 invitados $30.000 … 91–100 $220.000).
+
+## Endpoints de insumos-service (8084)
+
+| Método | Ruta | Respuesta |
+|---|---|---|
+| GET | `/api/insumos` | Inventario (nombre, unidad, stock) ordenado por nombre |
+| PATCH | `/api/insumos/{id}/stock` | Ajusta el stock: `{ "stock": 5 }` (400 si es negativo) |
+| POST | `/api/insumos/calculo` | Cuánto se necesita de cada insumo y si alcanza (no descuenta) |
+| POST | `/api/insumos/consumos` | Descuenta los insumos de una reserva (409 si falta algo; una reserva nunca descuenta dos veces) |
+
+Cálculo: `necesario(insumo) = Σ unidades del producto × cantidad por unidad (tabla recetas)`.
+Las tablas se llenan solas la primera vez: 21 insumos y las recetas de los 11 productos del catálogo (datos de ejemplo).
+
+```json
+GET /api/reservas/7/insumos
+→ { "alcanza": false, "insumos": [
+    { "insumoId": 7, "nombre": "Frutos rojos", "unidad": "kg", "necesario": 2.0, "stock": 1.8, "faltante": 0.2 },
+    { "insumoId": 1, "nombre": "Harina", "unidad": "kg", "necesario": 2.5, "stock": 18.5, "faltante": 0.0 } ] }
+```
+
 ## Endpoints de reservas-service (8082)
 
 | Método | Ruta | Quién lo usa | Qué hace |
 |---|---|---|---|
-| POST | `/api/cotizacion` | Cliente | Desglose: tarifa + productos + total + abono |
-| POST | `/api/reservas` | Cliente | Crea la reserva. El total lo calcula el servidor. 409 si es duplicada |
+| POST | `/api/reservas` | Cliente | Crea la reserva. El total lo pide a cotizacion-service. 409 si es duplicada |
 | GET | `/api/reservas?correo=...` | Cliente | Mi Agenda, ordenada por fecha y horario |
 | GET | `/api/reservas?estado=En revisión` | Admin | Panel admin (sin filtros o `Todas` = todas) |
 | GET | `/api/reservas/{id}` | Ambos | Una reserva, o 404 |
 | POST | `/api/reservas/{id}/comprobante?correo=...` | Cliente dueño | Sube la imagen (multipart, campo `archivo`, JPG/PNG/WEBP, máx. 5 MB) → *En revisión* |
 | GET | `/api/reservas/{id}/comprobante` | Admin | La imagen del comprobante |
-| PATCH | `/api/reservas/{id}/validar` | Admin | *En revisión* → *Pagado 50%* y guarda la fecha de pago |
+| PATCH | `/api/reservas/{id}/validar` | Admin | Descuenta los insumos (409 si faltan) y pasa de *En revisión* a *Pagado 50%* |
+| GET | `/api/reservas/{id}/insumos` | Admin | Botón "Calcular insumos": necesario, stock y faltante de cada insumo |
 | PATCH | `/api/reservas/{id}/rechazar` | Admin | *En revisión* → *Pendiente* y borra el comprobante |
 | PATCH | `/api/reservas/{id}/completar` | Admin | *Pagado 50%* → *Completado* |
 
@@ -51,13 +97,6 @@ así el precio nunca depende de lo que mande la app.
 POST /api/reservas
 { "nombreEvento": "Cumpleaños Ana", "fecha": "20/12/2026", "horario": "20:00", "invitados": 25,
   "observaciones": "Sin nueces", "correoCliente": "ana@correo.cl", "productoIds": [1, 7] }
-```
-
-```json
-POST /api/cotizacion
-{ "invitados": 25, "productoIds": [1] }
-→ { "invitados": 25, "servicio": 80000, "lineas": [ { "productoId": 1, "nombre": "Torta Frutos Rojos",
-    "unidades": 3, "precioUnitario": 45000, "subtotal": 135000 } ], "total": 215000, "abono": 107500 }
 ```
 
 Fechas en `dd/MM/yyyy` y horario en `HH:mm`, igual que en la app. La respuesta de una reserva incluye
@@ -80,8 +119,8 @@ Todos responden JSON `{ "mensaje": "..." }`; los de validación agregan `"errore
 | 400 | Datos inválidos (fecha pasada, invitados fuera de 1–100, producto inexistente...) |
 | 403 | Subir comprobante a una reserva de otro cliente |
 | 404 | No existe |
-| 409 | Reserva duplicada o cambio de estado no permitido |
-| 503 | reservas-service no pudo hablar con catalogo-service |
+| 409 | Reserva duplicada, cambio de estado no permitido o faltan insumos para validar |
+| 503 | Un servicio no pudo hablar con otro (reservas → cotización / insumos, o cotización → catálogo) |
 
 ## Estructura
 
@@ -96,10 +135,27 @@ catalogo-service/src/main/java/com/paolicias/catalogo
 reservas-service/src/main/java/com/paolicias/reservas
 ├── entities     Reserva, EstadoAbono
 ├── repository   ReservaRepository
-├── dto          ReservaRequest, CotizacionRequest, Cotizacion, ProductoCatalogo
+├── dto          ReservaRequest, Cotizacion, CalculoInsumos, LineaProducto
+├── client       CotizacionClient, InsumosClient (llaman a cotizacion e insumos)
+├── services     ReservaService(Impl), AlmacenComprobantes
+└── controller   ReservaController, ManejadorErrores
+
+cotizacion-service/src/main/java/com/paolicias/cotizacion
+├── entities     Tarifa
+├── repository   TarifaRepository
+├── dto          CotizacionRequest, Cotizacion, ProductoCatalogo
 ├── client       CatalogoClient (llama a catalogo-service)
-├── services     ReservaService(Impl), CotizacionService, AlmacenComprobantes
-└── controller   ReservaController, CotizacionController, ManejadorErrores
+├── services     CotizacionService
+├── controller   CotizacionController, TarifaController, ManejadorErrores
+└── seed         TarifaSeeder (10 tramos iniciales)
+
+insumos-service/src/main/java/com/paolicias/insumos
+├── entities     Insumo, Receta, Consumo
+├── repository   InsumoRepository, RecetaRepository, ConsumoRepository
+├── dto          CalculoRequest, ConsumoRequest, CalculoInsumos, LineaProducto, StockRequest
+├── services     InsumoService
+├── controller   InsumoController, ManejadorErrores
+└── seed         InsumoSeeder (21 insumos y recetas de los 11 productos)
 ```
 
 ## Pruebas (JUnit 5 + Mockito)
@@ -107,14 +163,16 @@ reservas-service/src/main/java/com/paolicias/reservas
 En cada carpeta: `./mvnw test` (no necesitan base de datos).
 
 - `catalogo-service`: 8 pruebas (servicio y controller).
-- `reservas-service`: 23 pruebas (reservas, cotización con el catálogo simulado, controller).
+- `reservas-service`: 22 pruebas (reservas con cotización e insumos simulados, controller).
+- `cotizacion-service`: 8 pruebas (cálculo con el catálogo y las tarifas simulados, controllers).
+- `insumos-service`: 11 pruebas (cálculo, descuento, faltantes, ajuste de stock, controller).
 
-## Despliegue en AWS EC2 (1 GB de RAM)
+## Despliegue en AWS EC2
 
 1. Crear la instancia (Ubuntu), instalar Docker: `sudo apt update && sudo apt install -y docker.io docker-compose-v2 git`
-2. Activar 1 GB de *swap* (recomendado con 1 GB de RAM):
+2. Activar 2 GB de *swap* (**obligatorio** con 1 GB de RAM; lo ideal es una instancia de 2 GB, como t3.small):
    ```bash
-   sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
    ```
 3. Clonar este repositorio, crear el `.env` y levantar:
@@ -122,9 +180,11 @@ En cada carpeta: `./mvnw test` (no necesitan base de datos).
      [duckdns.org](https://www.duckdns.org) que apunte a la IP pública de la EC2, ponerlo en `DOMINIO` del `.env` y ejecutar
      `sudo docker compose --profile https up -d --build`. Caddy obtiene el certificado solo.
      La app usa una sola dirección: `https://DOMINIO/`.
-   - **Sin dominio (solo pruebas):** `sudo docker compose up -d --build` y usar `http://IP:8081/` y `http://IP:8082/`
+   - **Sin dominio (solo pruebas):** `sudo docker compose up -d --build` y usar `http://IP:8081/` a `http://IP:8084/`
      (solo funciona con el APK *debug*).
-4. *Security Group*: abrir 22 (SSH), 80 y 443 (HTTPS). No abrir el 5434 de Postgres.
+4. *Security Group*: abrir 22 (SSH), 80 y 443 (HTTPS) (y 8081–8084 solo si pruebas sin dominio). No abrir el 5434 de Postgres.
 
-Memoria medida con Docker: catálogo ~190 MB, reservas ~205 MB, Postgres ~55 MB (≈450 MB en total).
+Memoria medida con Docker (con los ajustes de Java de `docker-compose.yml`): catálogo ~187 MB, cotización ~197 MB,
+insumos ~193 MB, reservas ~201 MB y Postgres ~57 MB (≈835 MB en total). Con 1 GB de RAM la *swap* del paso 2 es obligatoria;
+con una instancia de 2 GB funciona holgado.
 `docker-compose.yml` limita cada contenedor para que no se pasen.

@@ -27,10 +27,14 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 
-# Dirección de catalogo-service (para pedir los precios al cotizar)
-catalogo:
-  url: ${CATALOGO_URL:http://localhost:8081}
+# Dirección de cotizacion-service (calcula el total de cada reserva)
+cotizacion:
+  url: ${COTIZACION_URL:http://localhost:8083}
 
 # Carpeta donde se guardan las imágenes de los comprobantes (en Docker es un volumen)
 comprobantes:
   directorio: ${COMPROBANTES_DIR:./comprobantes}
+
+# Dirección de insumos-service (calcula y descuenta los insumos de cada reserva)
+insumos:
+  url: ${INSUMOS_URL:http://localhost:8084}

@@ -1,4 +1,4 @@
-package com.paolicias.reservas.dto;
+package com.paolicias.cotizacion.dto;
 
 import java.util.List;
 

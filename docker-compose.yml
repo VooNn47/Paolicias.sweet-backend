@@ -1,9 +1,12 @@
-# Un contenedor por microservicio + Postgres. Pensado para una EC2 pequeña (1 GB de RAM).
+# Un contenedor por microservicio + Postgres. Pensado para una EC2 pequeña (1 GB de RAM + swap).
 #   Local:      docker compose up -d --build
 #   EC2 HTTPS:  docker compose --profile https up -d --build   (necesita DOMINIO en el .env)
 x-java: &java
-  # Java usa como máximo el 75% del límite del contenedor; SerialGC gasta menos memoria
-  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1"
+  # Ajustes para que 4 servicios Java quepan en poca RAM: heap chico (estos servicios usan poco),
+  # SerialGC, cachés chicas, pilas de hilo pequeñas y menos hilos de Tomcat.
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:+UseSerialGC -Xss256k -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=24m -XX:MaxMetaspaceSize=110m -XX:+UseStringDeduplication"
+  SERVER_TOMCAT_THREADS_MAX: 20
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 2
   TZ: America/Santiago
   DB_HOST: postgres-db
   DB_PORT: 5432
@@ -17,7 +20,7 @@ services:
     image: postgres:18-alpine
     container_name: postgres_paolicias
     restart: always
-    mem_limit: 256m
+    mem_limit: 160m
     environment:
       POSTGRES_DB: paolicias_db
       POSTGRES_USER: ${DB_USER}
@@ -37,7 +40,7 @@ services:
     build: ./catalogo-service
     container_name: catalogo_service
     restart: always
-    mem_limit: 320m
+    mem_limit: 256m
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -47,11 +50,42 @@ services:
       <<: *java
       PORT: 8081
 
+  # Calcula el precio del evento: tarifa (tabla "tarifas") + precios del catálogo
+  cotizacion-service:
+    build: ./cotizacion-service
+    container_name: cotizacion_service
+    restart: always
+    mem_limit: 256m
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      <<: *java
+      PORT: 8083
+      CATALOGO_URL: http://catalogo-service:8081
+
+  # Inventario de la administradora: insumos, recetas por producto y consumos por reserva
+  insumos-service:
+    build: ./insumos-service
+    container_name: insumos_service
+    restart: always
+    mem_limit: 256m
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+    environment:
+      <<: *java
+      PORT: 8084
+
   reservas-service:
     build: ./reservas-service
     container_name: reservas_service
     restart: always
-    mem_limit: 352m
+    mem_limit: 288m
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -60,7 +94,8 @@ services:
     environment:
       <<: *java
       PORT: 8082
-      CATALOGO_URL: http://catalogo-service:8081
+      COTIZACION_URL: http://cotizacion-service:8083
+      INSUMOS_URL: http://insumos-service:8084
       COMPROBANTES_DIR: /data/comprobantes
     volumes:
       - comprobantes_data:/data/comprobantes
@@ -74,6 +109,8 @@ services:
     mem_limit: 64m
     depends_on:
       - catalogo-service
+      - cotizacion-service
+      - insumos-service
       - reservas-service
     ports:
       - "80:80"

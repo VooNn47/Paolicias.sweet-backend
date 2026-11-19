@@ -57,6 +57,12 @@ public class Reserva {
     @Column(length = 500)
     private String productos = "";
 
+    // Unidades de cada producto según la cotización, "productoId:unidades", ej: "1:3,7:25".
+    // Se usa para calcular los insumos de la reserva (no se muestra en el JSON).
+    @JsonIgnore
+    @Column(length = 500)
+    private String detalleProductos;
+
     // Tarifa del servicio según invitados (parte del total)
     private Integer tarifaServicio;
 

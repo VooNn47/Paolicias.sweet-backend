@@ -18,7 +18,12 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+<<<<<<< HEAD
 import org.springframework.web.bind.annotation.DeleteMapping;
+=======
+
+import com.paolicias.reservas.dto.CalculoInsumos;
+>>>>>>> origin/main
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.Reserva;
 import com.paolicias.reservas.services.ReservaService;
@@ -73,7 +78,13 @@ public class ReservaController {
         return ResponseEntity.ok().contentType(tipo).body(new FileSystemResource(archivo.ruta()));
     }
 
-    // PATCH /api/reservas/{id}/validar  ->  "Pagado 50%" y fecha de pago de hoy
+    // GET /api/reservas/{id}/insumos  ->  insumos necesarios, stock y faltantes (botón "Calcular insumos")
+    @GetMapping("/{id}/insumos")
+    public CalculoInsumos calcularInsumos(@PathVariable Long id) {
+        return reservaService.calcularInsumos(id);
+    }
+
+    // PATCH /api/reservas/{id}/validar  ->  descuenta los insumos (409 si faltan) y pasa a "Pagado 50%"
     @PatchMapping("/{id}/validar")
     public Reserva validar(@PathVariable Long id) {
         return reservaService.validarAbono(id);

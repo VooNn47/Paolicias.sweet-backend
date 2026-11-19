@@ -1,4 +1,4 @@
-package com.paolicias.reservas.dto;
+package com.paolicias.cotizacion.dto;
 
 // Los datos de un producto que reservas-service necesita de catalogo-service
 public record ProductoCatalogo(Long id, String nombre, Integer precio, Integer porciones) {
