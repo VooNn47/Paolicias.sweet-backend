@@ -1,6 +1,7 @@
 package com.paolicias.reservas.services;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -9,7 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.paolicias.reservas.client.CotizacionClient;
+import com.paolicias.reservas.client.InsumosClient;
+import com.paolicias.reservas.dto.CalculoInsumos;
 import com.paolicias.reservas.dto.Cotizacion;
+import com.paolicias.reservas.dto.LineaProducto;
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.EstadoAbono;
 import com.paolicias.reservas.entities.Reserva;
@@ -19,14 +24,17 @@ import com.paolicias.reservas.repository.ReservaRepository;
 public class ReservaServiceImpl implements ReservaService {
 
     private final ReservaRepository reservaRepo;
-    private final CotizacionService cotizacionService;
+    private final CotizacionClient cotizacionClient;
+    private final InsumosClient insumosClient;
     private final AlmacenComprobantes almacen;
 
     public ReservaServiceImpl(ReservaRepository reservaRepository,
-                              CotizacionService cotizacionService,
+                              CotizacionClient cotizacionClient,
+                              InsumosClient insumosClient,
                               AlmacenComprobantes almacenComprobantes) {
         this.reservaRepo = reservaRepository;
-        this.cotizacionService = cotizacionService;
+        this.cotizacionClient = cotizacionClient;
+        this.insumosClient = insumosClient;
         this.almacen = almacenComprobantes;
     }
 
@@ -46,7 +54,7 @@ public class ReservaServiceImpl implements ReservaService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya tienes esta reserva registrada");
         }
 
-        Cotizacion cotizacion = cotizacionService.calcular(req.invitados(), req.productoIds());
+        Cotizacion cotizacion = cotizacionClient.cotizar(req.invitados(), req.productoIds());
 
         Reserva r = new Reserva();
         r.setNombreEvento(nombreEvento);
@@ -59,9 +67,29 @@ public class ReservaServiceImpl implements ReservaService {
         r.setProductos(cotizacion.lineas().stream()
                 .map(l -> String.valueOf(l.productoId()))
                 .collect(Collectors.joining(",")));
+        r.setDetalleProductos(cotizacion.lineas().stream()
+                .map(l -> l.productoId() + ":" + l.unidades())
+                .collect(Collectors.joining(",")));
         r.setTarifaServicio(cotizacion.servicio());
         r.setTotal(cotizacion.total());
         return reservaRepo.save(r);
+    }
+
+    // "1:3,7:25" -> [(1, 3), (7, 25)]
+    static List<LineaProducto> lineasDe(Reserva r) {
+        String detalle = r.getDetalleProductos();
+        if (detalle == null || detalle.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(detalle.split(","))
+                .map(par -> par.split(":"))
+                .map(p -> new LineaProducto(Long.parseLong(p[0].trim()), Integer.parseInt(p[1].trim())))
+                .toList();
+    }
+
+    @Override
+    public CalculoInsumos calcularInsumos(Long id) {
+        return insumosClient.calcular(lineasDe(obtener(id)));
     }
 
     @Override
@@ -122,6 +150,9 @@ public class ReservaServiceImpl implements ReservaService {
     public Reserva validarAbono(Long id) {
         Reserva r = obtener(id);
         exigirEstado(r, EstadoAbono.EN_REVISION, "Solo se puede validar un abono que está En revisión");
+        // Antes de aceptar, se descuentan los insumos del inventario.
+        // Si falta algo, insumos-service responde 409 y la reserva sigue En revisión.
+        insumosClient.consumir(r.getId(), lineasDe(r));
         r.setEstadoAbono(EstadoAbono.PAGADO);
         r.setFechaPago(LocalDate.now());
         return reservaRepo.save(r);

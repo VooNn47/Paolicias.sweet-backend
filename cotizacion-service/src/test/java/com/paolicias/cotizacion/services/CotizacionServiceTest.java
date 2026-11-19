@@ -1,7 +1,8 @@
-package com.paolicias.reservas.services;
+package com.paolicias.cotizacion.services;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,37 +15,53 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.paolicias.reservas.client.CatalogoClient;
-import com.paolicias.reservas.dto.Cotizacion;
-import com.paolicias.reservas.dto.ProductoCatalogo;
+import com.paolicias.cotizacion.client.CatalogoClient;
+import com.paolicias.cotizacion.dto.Cotizacion;
+import com.paolicias.cotizacion.dto.ProductoCatalogo;
+import com.paolicias.cotizacion.entities.Tarifa;
+import com.paolicias.cotizacion.repository.TarifaRepository;
 
-// El catálogo (otro microservicio) se simula con Mockito
+// El catálogo (otro microservicio) y la tabla de tarifas se simulan con Mockito
 class CotizacionServiceTest {
 
+    private static final ProductoCatalogo TORTA = new ProductoCatalogo(1L, "Torta Frutos Rojos", 45000, 12);
+
     private CatalogoClient catalogo;
+    private TarifaRepository tarifas;
     private CotizacionService service;
 
     @BeforeEach
     void setUp() {
         catalogo = mock(CatalogoClient.class);
-        service = new CotizacionService(catalogo);
+        tarifas = mock(TarifaRepository.class);
+        service = new CotizacionService(catalogo, tarifas);
     }
 
-    private static final ProductoCatalogo TORTA = new ProductoCatalogo(1L, "Torta Frutos Rojos", 45000, 12);
+    // Simula la tabla con el tramo que contiene esa cantidad de invitados
+    private void tarifa(int invitados, int min, int max, int monto) {
+        when(tarifas.findFirstByMinInvitadosLessThanEqualAndMaxInvitadosGreaterThanEqual(invitados, invitados))
+                .thenReturn(Optional.of(new Tarifa(1L, min, max, monto)));
+    }
 
     @Test
-    void tarifaServicio_porTramosDe10() {
-        assertEquals(30000, CotizacionService.tarifaServicio(1));
-        assertEquals(30000, CotizacionService.tarifaServicio(10));
-        assertEquals(50000, CotizacionService.tarifaServicio(11));
-        assertEquals(80000, CotizacionService.tarifaServicio(25));
-        assertEquals(220000, CotizacionService.tarifaServicio(100));
-        assertEquals(0, CotizacionService.tarifaServicio(101));
+    void tarifaServicio_usaElTramoDeLaTabla() {
+        tarifa(25, 21, 30, 80000);
+
+        assertEquals(80000, service.tarifaServicio(25));
+    }
+
+    @Test
+    void tarifaServicio_sinTramo_esCero() {
+        when(tarifas.findFirstByMinInvitadosLessThanEqualAndMaxInvitadosGreaterThanEqual(anyInt(), anyInt()))
+                .thenReturn(Optional.empty());
+
+        assertEquals(0, service.tarifaServicio(150));
     }
 
     // Ejemplo del README: 25 invitados + Torta Frutos Rojos = $215.000, abono $107.500
     @Test
     void calcular_ejemploDelReadme() {
+        tarifa(25, 21, 30, 80000);
         when(catalogo.obtenerProducto(1L)).thenReturn(Optional.of(TORTA));
 
         Cotizacion c = service.calcular(25, List.of(1L));
@@ -58,6 +75,7 @@ class CotizacionServiceTest {
 
     @Test
     void calcular_ignoraProductosRepetidos() {
+        tarifa(25, 21, 30, 80000);
         when(catalogo.obtenerProducto(1L)).thenReturn(Optional.of(TORTA));
 
         Cotizacion c = service.calcular(25, List.of(1L, 1L));
@@ -68,6 +86,8 @@ class CotizacionServiceTest {
 
     @Test
     void calcular_sinProductos_soloCobraElServicio() {
+        tarifa(5, 1, 10, 30000);
+
         Cotizacion c = service.calcular(5, null);
 
         assertEquals(30000, c.total());
@@ -76,6 +96,7 @@ class CotizacionServiceTest {
 
     @Test
     void calcular_conProductoInexistente_lanza400() {
+        tarifa(10, 1, 10, 30000);
         when(catalogo.obtenerProducto(99L)).thenReturn(Optional.empty());
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,

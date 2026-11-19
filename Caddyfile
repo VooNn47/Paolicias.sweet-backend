@@ -1,4 +1,4 @@
-# Proxy HTTPS: una sola dirección https://DOMINIO para los dos microservicios.
+# Proxy HTTPS: una sola dirección https://DOMINIO para los cuatro microservicios.
 # Caddy pide y renueva el certificado SSL solo (Let's Encrypt).
 {$DOMINIO} {
 	handle /api/productos* {
@@ -8,7 +8,13 @@
 		reverse_proxy reservas-service:8082
 	}
 	handle /api/cotizacion* {
-		reverse_proxy reservas-service:8082
+		reverse_proxy cotizacion-service:8083
+	}
+	handle /api/tarifas* {
+		reverse_proxy cotizacion-service:8083
+	}
+	handle /api/insumos* {
+		reverse_proxy insumos-service:8084
 	}
 	handle {
 		respond "Paolicias.Sweet API" 200

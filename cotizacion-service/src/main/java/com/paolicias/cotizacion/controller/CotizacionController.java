@@ -1,13 +1,13 @@
-package com.paolicias.reservas.controller;
+package com.paolicias.cotizacion.controller;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.paolicias.reservas.dto.Cotizacion;
-import com.paolicias.reservas.dto.CotizacionRequest;
-import com.paolicias.reservas.services.CotizacionService;
+import com.paolicias.cotizacion.dto.Cotizacion;
+import com.paolicias.cotizacion.dto.CotizacionRequest;
+import com.paolicias.cotizacion.services.CotizacionService;
 
 import jakarta.validation.Valid;
 
