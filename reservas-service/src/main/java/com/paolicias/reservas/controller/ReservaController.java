@@ -18,12 +18,9 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-<<<<<<< HEAD
 import org.springframework.web.bind.annotation.DeleteMapping;
-=======
 
 import com.paolicias.reservas.dto.CalculoInsumos;
->>>>>>> origin/main
 import com.paolicias.reservas.dto.ReservaRequest;
 import com.paolicias.reservas.entities.Reserva;
 import com.paolicias.reservas.services.ReservaService;
