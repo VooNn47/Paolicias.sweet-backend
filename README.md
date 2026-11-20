@@ -92,6 +92,7 @@ GET /api/reservas/7/insumos
 | GET | `/api/reservas/{id}/insumos` | Admin | Botón "Calcular insumos": necesario, stock y faltante de cada insumo |
 | PATCH | `/api/reservas/{id}/rechazar` | Admin | *En revisión* → *Pendiente* y borra el comprobante |
 | PATCH | `/api/reservas/{id}/completar` | Admin | *Pagado 50%* → *Completado* |
+| DELETE | `/api/reservas/{id}` | Cliente | Elimina la reserva y su comprobante (404 si no existe) |
 
 ```json
 POST /api/reservas
@@ -188,3 +189,14 @@ Memoria medida con Docker (con los ajustes de Java de `docker-compose.yml`): cat
 insumos ~193 MB, reservas ~201 MB y Postgres ~57 MB (≈835 MB en total). Con 1 GB de RAM la *swap* del paso 2 es obligatoria;
 con una instancia de 2 GB funciona holgado.
 `docker-compose.yml` limita cada contenedor para que no se pasen.
+
+## Equipo y seguimiento
+
+| Integrante | Usuario GitHub |
+|---|---|
+| Ian Muñoz | [VooNn47](https://github.com/VooNn47) |
+| Alexander Heredia | [alheredia-cloud](https://github.com/alheredia-cloud) |
+| Bastian Canales | [BastyYisus](https://github.com/BastyYisus) |
+
+- **Tablero Trello:** https://trello.com/b/VhJgbjqS/banqueteriatrello
+- **Repositorio de la app Android:** https://github.com/VooNn47/Paolicias.sweet
