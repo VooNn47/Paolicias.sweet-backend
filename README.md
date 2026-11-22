@@ -190,6 +190,20 @@ insumos ~193 MB, reservas ~201 MB y Postgres ~57 MB (≈835 MB en total). Con 1 
 con una instancia de 2 GB funciona holgado.
 `docker-compose.yml` limita cada contenedor para que no se pasen.
 
+### Despliegue actual
+
+| Elemento | Valor |
+|---|---|
+| Dirección HTTPS (APK *release*) | `https://paolicias.duckdns.org/` — Caddy con certificado de Let's Encrypt |
+| IP pública de la EC2 | `54.235.250.79` (`us-east-1`, t3.micro de 1 GB con 2 GB de *swap*) |
+| Puertos abiertos | 22, 80, 443 y 8081–8084 (los 808x solo para el APK *debug*) |
+| Contenedores | los 4 microservicios, Postgres y Caddy (`--profile https`) |
+
+- La IP pública **cambia si la instancia se detiene y vuelve a iniciar**. Conviene asignarle una IP elástica; si cambia,
+  hay que actualizarla en DuckDNS y en `API_*_DEBUG` de la app.
+- Para reiniciar sin perder la IP, usar *Reiniciar instancia* (no *Detener* + *Iniciar*).
+- Prueba rápida: `https://paolicias.duckdns.org/api/productos` debe devolver los 11 productos.
+
 ## Equipo y seguimiento
 
 | Integrante | Usuario GitHub |
